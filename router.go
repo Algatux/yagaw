@@ -9,28 +9,12 @@ import (
 	"strings"
 )
 
-type Params map[string]any
 type RequestHandlerPackage struct {
-	Handler   RequestHandler
+	Handler   HttpRequestHandler
 	ParamList map[int]string
 	Params    Params
 }
-type RequestHandlerMap map[HttpRequestMethod]map[string]RequestHandlerPackage
-type RequestHandler func(rw http.ResponseWriter, req *http.Request, params Params)
-
-type HttpRequestMethod string
-
-const (
-	GET     HttpRequestMethod = `GET`
-	HEAD    HttpRequestMethod = `HEAD`
-	OPTIONS HttpRequestMethod = `OPTIONS`
-	TRACE   HttpRequestMethod = `TRACE`
-	PUT     HttpRequestMethod = `PUT`
-	DELETE  HttpRequestMethod = `DELETE`
-	POST    HttpRequestMethod = `POST`
-	PATCH   HttpRequestMethod = `PATCH`
-	CONNECT HttpRequestMethod = `CONNECT`
-)
+type RequestHandlerMap map[HttpMethod]map[string]RequestHandlerPackage
 
 type Router struct {
 	routes RequestHandlerMap
@@ -39,36 +23,44 @@ type Router struct {
 // ----------- REQUEST ROUTING -----------
 func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	debugRequest(rw, req)
-	handler := r.findReqHandler(req)
-	handler.Handler(rw, req, handler.Params)
+	handlerPkg := r.findReqHandler(req)
+	response := handlerPkg.Handler(req, handlerPkg.Params)
+
+	for key, header := range response.headers {
+		rw.Header().Set(key, header)
+	}
+	rw.WriteHeader(response.status)
+	fmt.Fprint(rw, response.body)
 }
 
 // ----------- PATTERN MATCHING -----------
 func (r *Router) findReqHandler(req *http.Request) RequestHandlerPackage {
-	_, methodFound := r.routes[HttpRequestMethod(req.Method)]
+	// Direct match on Method, if not found fast exit to 404
+	_, methodFound := r.routes[HttpMethod(req.Method)]
 	if !methodFound {
 		return RequestHandlerPackage{Handler: routeNotFoundHandler}
 	}
 
-	handlerPackage, routeFound := r.routes[HttpRequestMethod(req.Method)][req.URL.Path]
-
+	// Direct match on Not parametrized route, if not found fast exit to 404
+	handlerPackage, routeFound := r.routes[HttpMethod(req.Method)][req.URL.Path]
 	if routeFound {
 		return handlerPackage
 	}
 
-	if !routeFound {
-		key, matchFound := matchRoutePattern(maps.Keys(r.routes[HttpRequestMethod(req.Method)]), req.URL.Path)
-		if matchFound {
-			handlerPackage := r.routes[HttpRequestMethod(req.Method)][key]
-			for i, param := range handlerPackage.ParamList {
-				parts := strings.Split(req.URL.Path, "/")
-				handlerPackage.Params[param] = parts[i+1]
-			}
-
-			return r.routes[HttpRequestMethod(req.Method)][key]
+	// Matching on parametrized routes
+	key, matchFound := matchRoutePattern(maps.Keys(r.routes[HttpMethod(req.Method)]), req.URL.Path)
+	if matchFound {
+		// Extract the parametrized route and retrive parameters values
+		handlerPackage := r.routes[HttpMethod(req.Method)][key]
+		for i, param := range handlerPackage.ParamList {
+			parts := strings.Split(req.URL.Path, "/")
+			handlerPackage.Params[param] = parts[i+1]
 		}
+
+		return r.routes[HttpMethod(req.Method)][key]
 	}
 
+	// Still not found, drop the sponge
 	return RequestHandlerPackage{Handler: routeNotFoundHandler}
 }
 
@@ -84,7 +76,7 @@ func matchRoutePattern(keysIter iter.Seq[string], path string) (string, bool) {
 }
 
 // ----------- ROUTE REGISTRATION -----------
-func (r *Router) RegisterRoute(method HttpRequestMethod, path string, handler RequestHandler) {
+func (r *Router) RegisterRoute(method HttpMethod, path string, handler HttpRequestHandler) {
 	if r.routes[method] == nil {
 		r.routes[method] = make(map[string]RequestHandlerPackage)
 	}
@@ -150,10 +142,10 @@ func (r *Router) RegisteredRoutes() *RequestHandlerMap {
 
 // ----------- DEFALUT HANDLERS -----------
 
-func routeNotFoundHandler(rw http.ResponseWriter, req *http.Request, _ Params) {
-	rw.Header().Set("Content-Type", "text/plain")
-	rw.WriteHeader(http.StatusNotFound)
-	fmt.Fprintln(rw, "404 - Page not found")
+func routeNotFoundHandler(req *http.Request, _ Params) *HttpResponse {
+	return NewHttpResponse(http.StatusNotFound).
+		SetHeader("Content-Type", "text/plain").
+		SetBody("404 - Page not found")
 }
 
 // ----------- HELPERS -----------

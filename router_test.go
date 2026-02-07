@@ -1,7 +1,6 @@
 package yagaw
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,9 +9,10 @@ import (
 func TestRegisterRoute(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, _ Params) {
-		rw.WriteHeader(http.StatusOK)
-		io.WriteString(rw, "test response")
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetHeader("Content-Type", "text/plain").
+			SetBody("test response")
 	}
 
 	router.RegisterRoute(GET, "/users", handler)
@@ -30,10 +30,10 @@ func TestRegisterRoute(t *testing.T) {
 func TestServeHTTPExactPath(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, _ Params) {
-		rw.Header().Set("Content-Type", "text/plain")
-		rw.WriteHeader(http.StatusOK)
-		io.WriteString(rw, "exact path match")
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetHeader("Content-Type", "text/plain").
+			SetBody("exact path match")
 	}
 
 	router.RegisterRoute(GET, "/users", handler)
@@ -56,10 +56,10 @@ func TestServeHTTPExactPath(t *testing.T) {
 func TestServeHTTPPatternPath(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.Header().Set("Content-Type", "text/plain")
-		rw.WriteHeader(http.StatusOK)
-		io.WriteString(rw, "pattern matched")
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetHeader("Content-Type", "text/plain").
+			SetBody("pattern matched")
 	}
 
 	router.RegisterRoute(GET, "/users/{id}", handler)
@@ -103,9 +103,9 @@ func TestServeHTTPPatternPath(t *testing.T) {
 func TestServeHTTPMultipleParameters(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.WriteHeader(http.StatusOK)
-		io.WriteString(rw, "multi param matched")
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetBody("multi param matched")
 	}
 
 	router.RegisterRoute(GET, "/users/{userId}/posts/{postId}", handler)
@@ -144,14 +144,17 @@ func TestServeHTTPMultipleParameters(t *testing.T) {
 func TestServeHTTPDifferentMethods(t *testing.T) {
 	router := NewRouter()
 
-	getHandler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		io.WriteString(rw, "GET")
+	getHandler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetBody("GET")
 	}
-	postHandler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		io.WriteString(rw, "POST")
+	postHandler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetBody("POST")
 	}
-	deleteHandler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		io.WriteString(rw, "DELETE")
+	deleteHandler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetBody("DELETE")
 	}
 
 	router.RegisterRoute(GET, "/resource", getHandler)
@@ -159,7 +162,7 @@ func TestServeHTTPDifferentMethods(t *testing.T) {
 	router.RegisterRoute(DELETE, "/resource", deleteHandler)
 
 	tests := []struct {
-		method   HttpRequestMethod
+		method   HttpMethod
 		expected string
 	}{
 		{GET, "GET"},
@@ -184,9 +187,9 @@ func TestServeHTTPDifferentMethods(t *testing.T) {
 func TestServeHTTPMethodNotFound(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.WriteHeader(http.StatusOK)
-		io.WriteString(rw, "found")
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetBody("found")
 	}
 
 	router.RegisterRoute(GET, "/test", handler)
@@ -205,8 +208,8 @@ func TestServeHTTPMethodNotFound(t *testing.T) {
 func TestServeHTTPRouteNotFound(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.WriteHeader(http.StatusOK)
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK)
 	}
 
 	router.RegisterRoute(GET, "/users", handler)
@@ -220,7 +223,7 @@ func TestServeHTTPRouteNotFound(t *testing.T) {
 		t.Errorf("expected 404, got %d", rw.Code)
 	}
 
-	if rw.Body.String() != "404 - Page not found\n" {
+	if rw.Body.String() != "404 - Page not found" {
 		t.Errorf("expected '404 - Page not found', got %q", rw.Body.String())
 	}
 }
@@ -228,9 +231,9 @@ func TestServeHTTPRouteNotFound(t *testing.T) {
 func TestNestedPathsWithParameters(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.WriteHeader(http.StatusOK)
-		io.WriteString(rw, "nested")
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK).
+			SetBody("nested")
 	}
 
 	router.RegisterRoute(GET, "/api/v1/users/{id}/profile", handler)
@@ -267,7 +270,7 @@ func TestNestedPathsWithParameters(t *testing.T) {
 
 func BenchmarkRegisterRoute(b *testing.B) {
 	router := NewRouter()
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {}
+	handler := func(req *http.Request, params Params) *HttpResponse { return NewHttpResponse(http.StatusOK) }
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -277,8 +280,8 @@ func BenchmarkRegisterRoute(b *testing.B) {
 
 func BenchmarkServeHTTPExact(b *testing.B) {
 	router := NewRouter()
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.WriteHeader(http.StatusOK)
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK)
 	}
 	router.RegisterRoute(GET, "/users", handler)
 
@@ -293,8 +296,8 @@ func BenchmarkServeHTTPExact(b *testing.B) {
 
 func BenchmarkServeHTTPPattern(b *testing.B) {
 	router := NewRouter()
-	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
-		rw.WriteHeader(http.StatusOK)
+	handler := func(req *http.Request, params Params) *HttpResponse {
+		return NewHttpResponse(http.StatusOK)
 	}
 	router.RegisterRoute(GET, "/users/{id}", handler)
 
