@@ -9,8 +9,8 @@ import (
 
 func TestRegisterRoute(t *testing.T) {
 	router := NewRouter()
-	
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+
+	handler := func(rw http.ResponseWriter, req *http.Request, _ Params) {
 		rw.WriteHeader(http.StatusOK)
 		io.WriteString(rw, "test response")
 	}
@@ -30,7 +30,7 @@ func TestRegisterRoute(t *testing.T) {
 func TestServeHTTPExactPath(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, _ Params) {
 		rw.Header().Set("Content-Type", "text/plain")
 		rw.WriteHeader(http.StatusOK)
 		io.WriteString(rw, "exact path match")
@@ -56,7 +56,7 @@ func TestServeHTTPExactPath(t *testing.T) {
 func TestServeHTTPPatternPath(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.Header().Set("Content-Type", "text/plain")
 		rw.WriteHeader(http.StatusOK)
 		io.WriteString(rw, "pattern matched")
@@ -65,9 +65,9 @@ func TestServeHTTPPatternPath(t *testing.T) {
 	router.RegisterRoute(GET, "/users/{id}", handler)
 
 	tests := []struct {
-		name       string
-		path       string
-		shouldAct  bool
+		name      string
+		path      string
+		shouldAct bool
 	}{
 		{"valid id", "/users/123", true},
 		{"id with hyphen", "/users/user-123", true},
@@ -103,7 +103,7 @@ func TestServeHTTPPatternPath(t *testing.T) {
 func TestServeHTTPMultipleParameters(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.WriteHeader(http.StatusOK)
 		io.WriteString(rw, "multi param matched")
 	}
@@ -144,13 +144,13 @@ func TestServeHTTPMultipleParameters(t *testing.T) {
 func TestServeHTTPDifferentMethods(t *testing.T) {
 	router := NewRouter()
 
-	getHandler := func(rw http.ResponseWriter, req *http.Request) {
+	getHandler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		io.WriteString(rw, "GET")
 	}
-	postHandler := func(rw http.ResponseWriter, req *http.Request) {
+	postHandler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		io.WriteString(rw, "POST")
 	}
-	deleteHandler := func(rw http.ResponseWriter, req *http.Request) {
+	deleteHandler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		io.WriteString(rw, "DELETE")
 	}
 
@@ -184,7 +184,7 @@ func TestServeHTTPDifferentMethods(t *testing.T) {
 func TestServeHTTPMethodNotFound(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.WriteHeader(http.StatusOK)
 		io.WriteString(rw, "found")
 	}
@@ -205,7 +205,7 @@ func TestServeHTTPMethodNotFound(t *testing.T) {
 func TestServeHTTPRouteNotFound(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.WriteHeader(http.StatusOK)
 	}
 
@@ -228,7 +228,7 @@ func TestServeHTTPRouteNotFound(t *testing.T) {
 func TestNestedPathsWithParameters(t *testing.T) {
 	router := NewRouter()
 
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.WriteHeader(http.StatusOK)
 		io.WriteString(rw, "nested")
 	}
@@ -267,7 +267,7 @@ func TestNestedPathsWithParameters(t *testing.T) {
 
 func BenchmarkRegisterRoute(b *testing.B) {
 	router := NewRouter()
-	handler := func(rw http.ResponseWriter, req *http.Request) {}
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -277,7 +277,7 @@ func BenchmarkRegisterRoute(b *testing.B) {
 
 func BenchmarkServeHTTPExact(b *testing.B) {
 	router := NewRouter()
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.WriteHeader(http.StatusOK)
 	}
 	router.RegisterRoute(GET, "/users", handler)
@@ -293,7 +293,7 @@ func BenchmarkServeHTTPExact(b *testing.B) {
 
 func BenchmarkServeHTTPPattern(b *testing.B) {
 	router := NewRouter()
-	handler := func(rw http.ResponseWriter, req *http.Request) {
+	handler := func(rw http.ResponseWriter, req *http.Request, params Params) {
 		rw.WriteHeader(http.StatusOK)
 	}
 	router.RegisterRoute(GET, "/users/{id}", handler)

@@ -9,12 +9,14 @@ import (
 	"strings"
 )
 
+type Params map[string]any
 type RequestHandlerPackage struct {
 	Handler   RequestHandler
 	ParamList map[int]string
+	Params    Params
 }
 type RequestHandlerMap map[HttpRequestMethod]map[string]RequestHandlerPackage
-type RequestHandler func(rw http.ResponseWriter, req *http.Request)
+type RequestHandler func(rw http.ResponseWriter, req *http.Request, params Params)
 
 type HttpRequestMethod string
 
@@ -37,38 +39,37 @@ type Router struct {
 // ----------- REQUEST ROUTING -----------
 func (r *Router) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	debugRequest(rw, req)
-	handler, err := r.findReqHandler(req)
-	if err != nil {
-		Log.FatalError(err)
-	}
-	handler(rw, req)
+	handler := r.findReqHandler(req)
+	handler.Handler(rw, req, handler.Params)
 }
 
 // ----------- PATTERN MATCHING -----------
-func (r *Router) findReqHandler(req *http.Request) (RequestHandler, error) {
+func (r *Router) findReqHandler(req *http.Request) RequestHandlerPackage {
 	_, methodFound := r.routes[HttpRequestMethod(req.Method)]
 	if !methodFound {
-		return routeNotFoundHandler, nil
+		return RequestHandlerPackage{Handler: routeNotFoundHandler}
 	}
 
 	handlerPackage, routeFound := r.routes[HttpRequestMethod(req.Method)][req.URL.Path]
 
 	if routeFound {
-		return handlerPackage.Handler, nil
+		return handlerPackage
 	}
 
 	if !routeFound {
-		path, matchFound := matchRoutePattern(maps.Keys(r.routes[HttpRequestMethod(req.Method)]), req.URL.Path)
+		key, matchFound := matchRoutePattern(maps.Keys(r.routes[HttpRequestMethod(req.Method)]), req.URL.Path)
 		if matchFound {
-			re := regexp.MustCompile(`(?i)({[a-z0-9-_]+})`)
-			values := re.FindStringSubmatch(req.URL.Path)
-			Log.Debug(values)
+			handlerPackage := r.routes[HttpRequestMethod(req.Method)][key]
+			for i, param := range handlerPackage.ParamList {
+				parts := strings.Split(req.URL.Path, "/")
+				handlerPackage.Params[param] = parts[i+1]
+			}
 
-			return r.routes[HttpRequestMethod(req.Method)][path].Handler, nil
+			return r.routes[HttpRequestMethod(req.Method)][key]
 		}
 	}
 
-	return routeNotFoundHandler, nil
+	return RequestHandlerPackage{Handler: routeNotFoundHandler}
 }
 
 func matchRoutePattern(keysIter iter.Seq[string], path string) (string, bool) {
@@ -135,9 +136,12 @@ func (r *Router) RegisterRoute(method HttpRequestMethod, path string, handler Re
 		reqParamList[param.pos] = param.name
 	}
 	pathBuilder.WriteString(path[lastPos:])
-	newPath := "^" + pathBuilder.String() + "$"
+	newPath := pathBuilder.String()
+	if len(paramList) > 0 {
+		newPath = "^" + newPath + "$"
+	}
 
-	r.routes[method][newPath] = RequestHandlerPackage{Handler: handler, ParamList: reqParamList}
+	r.routes[method][newPath] = RequestHandlerPackage{Handler: handler, ParamList: reqParamList, Params: make(Params)}
 }
 
 func (r *Router) RegisteredRoutes() *RequestHandlerMap {
@@ -146,7 +150,7 @@ func (r *Router) RegisteredRoutes() *RequestHandlerMap {
 
 // ----------- DEFALUT HANDLERS -----------
 
-func routeNotFoundHandler(rw http.ResponseWriter, req *http.Request) {
+func routeNotFoundHandler(rw http.ResponseWriter, req *http.Request, _ Params) {
 	rw.Header().Set("Content-Type", "text/plain")
 	rw.WriteHeader(http.StatusNotFound)
 	fmt.Fprintln(rw, "404 - Page not found")
