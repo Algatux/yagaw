@@ -14,10 +14,12 @@ func main() {
 
 	router := server.GetRouter()
 
-	router.RegisterRoute(yagaw.GET, "/test", func(rw http.ResponseWriter, req *http.Request) {
+	router.RegisterRoute(yagaw.GET, "/test/{a}", func(rw http.ResponseWriter, req *http.Request) {
 		rw.Header().Set("Content-Type", "text/plain")
 		fmt.Fprintln(rw, "Welcome to our custom HTTP server!")
 	})
+
+	yagaw.Log.Debug(router.RegisteredRoutes())
 
 	server.Run()
 }
